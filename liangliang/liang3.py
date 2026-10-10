@@ -6,6 +6,7 @@ import zipfile
 import hashlib
 from datetime import datetime
 import plotly.graph_objects as go
+import plotly.io as pio
 
 st.set_page_config(
     page_title="CSV 批量转 Excel + 应力应变曲线",
@@ -18,237 +19,169 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* 主背景 */
-    .stApp {
-        background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
-    }
-
-    /* 隐藏默认 header 空隙 */
-    .block-container {
-        padding-top: 1.6rem;
-        padding-bottom: 3rem;
-        max-width: 1400px;
-    }
-
-    /* 标题 */
-    h1, h2, h3 {
-        color: #0f172a;
-        letter-spacing: 0.2px;
-    }
+    .stApp { background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%); }
+    .block-container { padding-top: 1.6rem; padding-bottom: 3rem; max-width: 1400px; }
+    h1, h2, h3 { color: #0f172a; letter-spacing: 0.2px; }
     h1 { font-weight: 800; }
 
-    /* 卡片容器 */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        background: #ffffff;
-        border-radius: 14px;
+        background: #ffffff; border-radius: 14px;
         box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
-        border: 1px solid #e8edf3;
-        padding: 6px 4px;
+        border: 1px solid #e8edf3; padding: 6px 4px;
     }
-
-    /* 指标卡 */
     div[data-testid="stMetric"] {
         background: linear-gradient(135deg, #ffffff 0%, #f4f8ff 100%);
-        border: 1px solid #e3ebf6;
-        border-radius: 12px;
-        padding: 12px 14px;
-        box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+        border: 1px solid #e3ebf6; border-radius: 12px;
+        padding: 12px 14px; box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
     }
-    div[data-testid="stMetricLabel"] {
-        color: #64748b;
-        font-weight: 600;
-    }
-    div[data-testid="stMetricValue"] {
-        color: #1d4ed8;
-        font-weight: 700;
-    }
+    div[data-testid="stMetricLabel"] { color: #64748b; font-weight: 600; }
+    div[data-testid="stMetricValue"] { color: #1d4ed8; font-weight: 700; }
 
-    /* Tab */
     button[data-baseweb="tab"] {
-        font-weight: 600;
-        color: #475569;
-        padding-top: 0.6rem;
-        padding-bottom: 0.6rem;
+        font-weight: 600; color: #475569;
+        padding-top: 0.6rem; padding-bottom: 0.6rem;
     }
-    button[data-baseweb="tab"][aria-selected="true"] {
-        color: #1d4ed8;
-    }
+    button[data-baseweb="tab"][aria-selected="true"] { color: #1d4ed8; }
     div[data-baseweb="tab-list"] {
-        gap: 6px;
-        background: #ffffff;
-        padding: 6px 8px;
-        border-radius: 12px;
-        border: 1px solid #e8edf3;
+        gap: 6px; background: #ffffff; padding: 6px 8px;
+        border-radius: 12px; border: 1px solid #e8edf3;
         box-shadow: 0 1px 4px rgba(15, 23, 42, 0.03);
     }
 
-    /* 下载按钮 */
     div[data-testid="stDownloadButton"] > button {
         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-        color: #ffffff;
-        border: none;
-        border-radius: 10px;
-        font-weight: 600;
-        padding: 0.5rem 1rem;
+        color: #ffffff; border: none; border-radius: 10px;
+        font-weight: 600; padding: 0.5rem 1rem;
         box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
-        transition: all 0.15s ease;
-        width: 100%;
+        transition: all 0.15s ease; width: 100%;
     }
     div[data-testid="stDownloadButton"] > button:hover {
         transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
     }
 
-    /* 普通按钮 */
-    div[data-testid="stButton"] > button {
-        border-radius: 10px;
-        font-weight: 600;
-    }
+    div[data-testid="stButton"] > button { border-radius: 10px; font-weight: 600; }
 
-    /* 侧边栏 */
     section[data-testid="stSidebar"] {
-        background: #ffffff;
-        border-right: 1px solid #e8edf3;
+        background: #ffffff; border-right: 1px solid #e8edf3;
     }
-    section[data-testid="stSidebar"] .block-container {
-        padding-top: 1.2rem;
-    }
+    section[data-testid="stSidebar"] .block-container { padding-top: 1.2rem; }
 
-    /* 上传区 */
     section[data-testid="stFileUploaderDropzone"] {
-        background: #f8fafc;
-        border: 2px dashed #cbd5e1;
-        border-radius: 12px;
-        transition: all 0.2s ease;
+        background: #f8fafc; border: 2px dashed #cbd5e1;
+        border-radius: 12px; transition: all 0.2s ease;
     }
     section[data-testid="stFileUploaderDropzone"]:hover {
-        border-color: #2563eb;
-        background: #f0f7ff;
+        border-color: #2563eb; background: #f0f7ff;
     }
 
-    /* 分隔线 */
-    hr {
-        border-color: #e8edf3;
-        margin: 1rem 0;
-    }
+    hr { border-color: #e8edf3; margin: 1rem 0; }
 
-    /* Hero 区 */
     .hero-card {
         background: linear-gradient(135deg, #ffffff 0%, #eef4ff 100%);
-        border: 1px solid #dbe7ff;
-        border-radius: 18px;
-        padding: 22px 26px;
-        box-shadow: 0 6px 22px rgba(37, 99, 235, 0.08);
+        border: 1px solid #dbe7ff; border-radius: 18px;
+        padding: 22px 26px; box-shadow: 0 6px 22px rgba(37, 99, 235, 0.08);
         margin-bottom: 18px;
     }
     .hero-title {
-        font-size: 1.75rem;
-        font-weight: 800;
-        color: #0f172a;
-        margin: 0 0 6px 0;
-        letter-spacing: 0.3px;
+        font-size: 1.75rem; font-weight: 800; color: #0f172a;
+        margin: 0 0 6px 0; letter-spacing: 0.3px;
     }
-    .hero-sub {
-        color: #64748b;
-        font-size: 0.95rem;
-        margin: 0 0 14px 0;
-    }
-    .hero-badges {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-    }
+    .hero-sub { color: #64748b; font-size: 0.95rem; margin: 0 0 14px 0; }
+    .hero-badges { display: flex; gap: 10px; flex-wrap: wrap; }
     .hero-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        background: #ffffff;
-        border: 1px solid #dbe7ff;
-        color: #1d4ed8;
-        font-weight: 600;
-        font-size: 0.82rem;
-        padding: 6px 12px;
-        border-radius: 999px;
-        box-shadow: 0 1px 3px rgba(37, 99, 235, 0.06);
+        display: inline-flex; align-items: center; gap: 6px;
+        background: #ffffff; border: 1px solid #dbe7ff; color: #1d4ed8;
+        font-weight: 600; font-size: 0.82rem; padding: 6px 12px;
+        border-radius: 999px; box-shadow: 0 1px 3px rgba(37, 99, 235, 0.06);
     }
-    .hero-badge .dot {
-        width: 7px; height: 7px; border-radius: 50%;
-        background: #2563eb;
-    }
+    .hero-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: #2563eb; }
 
-    /* 侧边栏分组标题 */
+    .formula-box {
+        margin-top: 14px; padding: 12px 16px; background: #ffffff;
+        border: 1px solid #dbe7ff; border-radius: 12px;
+        font-family: 'Cambria Math', 'Times New Roman', serif;
+        font-size: 1.05rem; color: #0f172a;
+    }
+    .frac { display: inline-block; text-align: center; vertical-align: middle; margin: 0 4px; }
+    .frac .num { border-bottom: 1.5px solid #0f172a; padding: 0 6px; display: block; }
+    .frac .den { padding: 0 6px; display: block; }
+
     .side-group {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-weight: 700;
-        color: #0f172a;
-        font-size: 0.95rem;
-        margin: 4px 0 8px 0;
+        display: flex; align-items: center; gap: 8px;
+        font-weight: 700; color: #0f172a; font-size: 0.95rem; margin: 4px 0 8px 0;
     }
     .side-group .ico {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 24px; height: 24px;
-        border-radius: 8px;
-        background: #eef4ff;
-        color: #2563eb;
-        font-size: 0.85rem;
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 24px; height: 24px; border-radius: 8px;
+        background: #eef4ff; color: #2563eb; font-size: 0.85rem;
     }
 
-    /* 文件卡片头部 */
     .file-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        margin-bottom: 6px;
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 10px; margin-bottom: 6px;
     }
-    .file-name {
-        font-weight: 700;
-        color: #0f172a;
-        word-break: break-all;
-    }
+    .file-name { font-weight: 700; color: #0f172a; word-break: break-all; }
     .badge {
-        display: inline-block;
-        padding: 3px 10px;
-        border-radius: 999px;
-        font-size: 0.75rem;
-        font-weight: 700;
+        display: inline-block; padding: 3px 10px; border-radius: 999px;
+        font-size: 0.75rem; font-weight: 700;
     }
     .badge-ok { background: #dcfce7; color: #15803d; }
     .badge-warn { background: #fef3c7; color: #b45309; }
     .badge-err { background: #fee2e2; color: #b91c1c; }
 
-    .small-muted { color: #94a3b8; font-size: 0.8rem; }
-
-    /* 空状态 */
     .empty-state {
-        text-align: center;
-        padding: 60px 20px;
-        background: #ffffff;
-        border: 1px dashed #cbd5e1;
-        border-radius: 16px;
-        color: #64748b;
+        text-align: center; padding: 60px 20px; background: #ffffff;
+        border: 1px dashed #cbd5e1; border-radius: 16px; color: #64748b;
     }
     .empty-state .icon { font-size: 2.4rem; margin-bottom: 8px; }
     .empty-state .title { font-weight: 700; color: #334155; font-size: 1.05rem; }
+
+    .chart-title {
+        font-weight: 700; color: #0f172a; font-size: 1.0rem; margin: 4px 0 2px 2px;
+    }
+    .chart-sub {
+        color: #64748b; font-size: 0.82rem; margin: 0 0 6px 2px;
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 # ============ 固定字段 ============
-X_FIELD = "Axial Strain (%)"     # X 轴：应变
-Y_FIELD = "Axial Stress (kPa)"   # Y 轴：应力
+X_FIELD = "Axial Strain (%)"
+Y_FIELD = "Axial Stress (kPa)"
+
+# ============ 应力换算参数（直径 50 cm） ============
+SPECIMEN_DIAMETER_CM = 50.0
+SPECIMEN_RADIUS_CM = SPECIMEN_DIAMETER_CM / 2
+SPECIMEN_AREA_CM2 = 3.14 * SPECIMEN_RADIUS_CM ** 2
+Y_FIELD_PLOT = "Axial Stress (MPa)"
+
+
+def kpa_to_mpa(stress_kpa):
+    return stress_kpa / SPECIMEN_AREA_CM2
+
+
+# ============ 公式 HTML ============
+FORMULA_HTML = (
+    "<span style=\"font-family:'Cambria Math','Times New Roman',serif;font-size:1.05rem;\">"
+    "Axial Stress (MPa) = "
+    "<span class=\"frac\">"
+    "<span class=\"num\">Axial Stress (kPa)</span>"
+    "<span class=\"den\">3.14 × (50 / 2)<sup>2</sup></span>"
+    "</span>"
+    "<span style=\"color:#64748b;font-size:0.9rem;\">"
+    f"&nbsp;（试件直径 50 cm，半径 25 cm，截面积 ≈ {SPECIMEN_AREA_CM2:.1f} cm²）"
+    "</span>"
+    "</span>"
+)
 
 # ============ 侧边栏 ============
 with st.sidebar:
     st.markdown("## ⚙️ 控制面板")
     st.caption("所有设置实时生效")
 
-    # --- 转换设置 ---
     st.markdown('<div class="side-group"><span class="ico">🔄</span>转换设置</div>', unsafe_allow_html=True)
     encoding_option = st.selectbox(
         "文件编码",
@@ -262,39 +195,36 @@ with st.sidebar:
 
     st.divider()
 
-    # --- 绘图设置 ---
     st.markdown('<div class="side-group"><span class="ico">📊</span>绘图设置</div>', unsafe_allow_html=True)
     st.caption(f"X 轴固定：**{X_FIELD}**")
-    st.caption(f"Y 轴固定：**{Y_FIELD}**")
+    st.caption(f"原始 Y：**{Y_FIELD}**")
+    st.caption(f"换算 Y：**{Y_FIELD_PLOT}**")
     plot_type = st.radio("图类型", ["折线", "散点", "折线+散点"], index=0, horizontal=True)
     downsample = st.slider("抽样点数（0=不抽样）", 0, 5000, 0, step=500)
-    show_fill = st.checkbox("曲线下方填充", value=True)
+    show_fill = st.checkbox("曲线下方填充", value=False)
 
     st.divider()
-
-    # --- 数据裁剪 ---
-    st.markdown('<div class="side-group"><span class="ico">✂️</span>数据裁剪</div>', unsafe_allow_html=True)
-    st.caption("去除每个文件开头/结尾的固定行数后再绘图。")
     trim_enabled = st.checkbox("启用行裁剪", value=True)
     col_a, col_b = st.columns(2)
     with col_a:
         trim_head = st.number_input(
-            "去除前 N 行", min_value=0, max_value=10000, value=10, step=1
+            "去除前 N 行", min_value=0, max_value=100000, value=10, step=1
         )
     with col_b:
         trim_tail = st.number_input(
-            "去除后 N 行", min_value=0, max_value=10000, value=20, step=1
+            "去除后 N 行", min_value=0, max_value=100000, value=20, step=1
         )
+
+# ============ 裁剪参数的 session_state 初始化 ============
+if "trim_head_use" not in st.session_state:
+    st.session_state["trim_head_use"] = int(trim_head)
+if "trim_tail_use" not in st.session_state:
+    st.session_state["trim_tail_use"] = int(trim_tail)
 
 
 # ============ 工具函数 ============
 def _try_read(file_bytes, enc, sep, engine):
-    return pd.read_csv(
-        io.BytesIO(file_bytes),
-        encoding=enc,
-        sep=sep,
-        engine=engine,
-    )
+    return pd.read_csv(io.BytesIO(file_bytes), encoding=enc, sep=sep, engine=engine)
 
 
 @st.cache_data(show_spinner=False, max_entries=64)
@@ -340,7 +270,6 @@ def df_to_excel_bytes_cached(df: pd.DataFrame, sheet_name: str) -> bytes:
 
 
 def find_fixed_columns(df: pd.DataFrame):
-    """精确匹配 + 忽略大小写/空格匹配"""
     def normalize(s):
         return str(s).strip().lower()
 
@@ -384,78 +313,86 @@ def trim_dataframe(df: pd.DataFrame, head_n: int, tail_n: int):
     }
 
 
-def make_plot(df, x_col, y_col, plot_type, downsample, show_fill=True, title=None):
-    data = df[[x_col, y_col]].dropna()
+def _base_axis_style(is_y_axis=False):
+    style = dict(
+        showgrid=False, zeroline=False, showline=True,
+        linecolor="black", linewidth=1.3, mirror=True,
+        ticks="outside", ticklen=5, tickwidth=1.1, tickcolor="black",
+        showticklabels=True,
+        tickfont=dict(family="Times New Roman, 'Songti SC', SimSun, serif",
+                      size=13, color="black"),
+        title_font=dict(family="Times New Roman, 'Songti SC', SimSun, serif",
+                        size=15, color="black"),
+    )
+    if is_y_axis:
+        style.update(tickformat=",.0f", exponentformat="none")
+    return style
+
+
+def _base_layout(x_title, y_title):
+    return dict(
+        title=None,
+        xaxis=dict(title=dict(text=str(x_title), standoff=12),
+                   **_base_axis_style(False)),
+        yaxis=dict(title=dict(text=str(y_title), standoff=12),
+                   **_base_axis_style(True)),
+        template="simple_white",
+        paper_bgcolor="white", plot_bgcolor="white",
+        hovermode="x unified", height=520,
+        margin=dict(l=90, r=30, t=30, b=80),
+        font=dict(family="Times New Roman, 'Songti SC', SimSun, serif",
+                  size=13, color="black"),
+        showlegend=False,
+    )
+
+
+def make_plot_raw(df, x_col, y_col, plot_type, downsample, show_fill=False):
+    data = df[[x_col, y_col]].dropna().copy()
     if downsample and len(data) > downsample:
         data = data.iloc[:: max(1, len(data) // downsample)]
 
-    mode_map = {"折线": "lines", "散点": "markers", "折线+散点": "lines+markers"}
-    mode = mode_map[plot_type]
+    mode = {"折线": "lines", "散点": "markers", "折线+散点": "lines+markers"}[plot_type]
 
     fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=data[x_col],
-            y=data[y_col],
-            mode=mode,
-            name=f"{y_col} vs {x_col}",
-            line=dict(color="#2563eb", width=2.4, shape="spline", smoothing=0.6),
-            marker=dict(size=5, color="#2563eb", line=dict(width=0)),
-            fill="tozeroy" if (show_fill and "lines" in mode) else None,
-            fillcolor="rgba(37, 99, 235, 0.08)",
-            hovertemplate=(
-                f"<b>{x_col}</b>: %{{x:.4g}}<br>"
-                f"<b>{y_col}</b>: %{{y:.4g}}<extra></extra>"
-            ),
-        )
-    )
-
-    fig.update_layout(
-        title=dict(
-            text=title or f"{y_col} — {x_col}",
-            font=dict(size=17, color="#1e293b"),
-            x=0.02,
-            xanchor="left",
-        ),
-        xaxis=dict(
-            title=dict(text=str(x_col), font=dict(size=13, color="#475569")),
-            showgrid=True,
-            gridcolor="rgba(148, 163, 184, 0.18)",
-            zeroline=False,
-            ticks="outside",
-            tickcolor="rgba(148, 163, 184, 0.4)",
-            linecolor="rgba(148, 163, 184, 0.5)",
-            mirror=False,
-        ),
-        yaxis=dict(
-            title=dict(text=str(y_col), font=dict(size=13, color="#475569")),
-            showgrid=True,
-            gridcolor="rgba(148, 163, 184, 0.18)",
-            zeroline=False,
-            ticks="outside",
-            tickcolor="rgba(148, 163, 184, 0.4)",
-            linecolor="rgba(148, 163, 184, 0.5)",
-            mirror=False,
-        ),
-        template="plotly_white",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="#ffffff",
-        hovermode="x unified",
-        height=580,
-        margin=dict(l=70, r=40, t=70, b=70),
-        font=dict(family="Inter, 'Segoe UI', 'Microsoft YaHei', sans-serif", size=12),
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1,
-            bgcolor="rgba(255,255,255,0.7)",
-            bordercolor="rgba(148,163,184,0.3)",
-            borderwidth=1,
-        ),
-    )
+    fig.add_trace(go.Scatter(
+        x=data[x_col], y=data[y_col], mode=mode, name=str(y_col),
+        line=dict(color="black", width=1.1, shape="linear"),
+        marker=dict(size=4, color="black", symbol="circle", line=dict(width=0)),
+        fill="tozeroy" if (show_fill and "lines" in mode) else None,
+        fillcolor="rgba(0, 0, 0, 0.04)",
+        hovertemplate=f"<b>{x_col}</b>: %{{x:.4g}}<br>"
+                      f"<b>{y_col}</b>: %{{y:.0f}}<extra></extra>",
+    ))
+    fig.update_layout(**_base_layout(x_col, y_col))
     return fig
+
+
+def make_plot_mpa(df, x_col, y_col, plot_type, downsample, show_fill=False):
+    data = df[[x_col, y_col]].dropna().copy()
+    data[y_col] = kpa_to_mpa(data[y_col])
+    if downsample and len(data) > downsample:
+        data = data.iloc[:: max(1, len(data) // downsample)]
+
+    mode = {"折线": "lines", "散点": "markers", "折线+散点": "lines+markers"}[plot_type]
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=data[x_col], y=data[y_col], mode=mode, name=str(Y_FIELD_PLOT),
+        line=dict(color="black", width=1.1, shape="linear"),
+        marker=dict(size=4, color="black", symbol="circle", line=dict(width=0)),
+        fill="tozeroy" if (show_fill and "lines" in mode) else None,
+        fillcolor="rgba(0, 0, 0, 0.04)",
+        hovertemplate=f"<b>{x_col}</b>: %{{x:.4g}}<br>"
+                      f"<b>{Y_FIELD_PLOT}</b>: %{{y:.4g}}<extra></extra>",
+    ))
+    fig.update_layout(**_base_layout(x_col, Y_FIELD_PLOT))
+    return fig
+
+
+@st.cache_data(show_spinner=False, max_entries=64)
+def fig_json_to_png(fig_json: str, scale: int = 2) -> bytes:
+    fig = pio.from_json(fig_json)
+    return fig.to_image(format="png", scale=scale)
 
 
 def build_zip(files: dict) -> bytes:
@@ -480,21 +417,23 @@ def render_badge(text, kind="ok"):
 
 
 # ============ Hero 区 ============
-st.markdown(
-    f"""
-    <div class="hero-card">
-        <div class="hero-title">📈 含孔蠕变应力应变处理</div>
-        <div class="hero-sub">批量上传 CSV / TXT → 自动解析转换 Excel → 一键绘制应力应变曲线</div>
-        <div class="hero-badges">
-            <span class="hero-badge"><span class="dot"></span>X 轴：{X_FIELD}</span>
-            <span class="hero-badge"><span class="dot"></span>Y 轴：{Y_FIELD}</span>
-            <span class="hero-badge"><span class="dot"></span>自动识别编码 / 分隔符</span>
-            <span class="hero-badge"><span class="dot"></span>支持批量导出 ZIP</span>
-        </div>
+st.markdown(f"""
+<div class="hero-card">
+    <div class="hero-title">📈 含孔蠕变应力应变处理</div>
+    <div class="hero-sub">批量上传 CSV / TXT → 自动解析转换 Excel → 一键绘制应力应变曲线</div>
+    <div class="hero-badges">
+        <span class="hero-badge"><span class="dot"></span>X 轴：{X_FIELD}</span>
+        <span class="hero-badge"><span class="dot"></span>原始 Y：{Y_FIELD}</span>
+        <span class="hero-badge"><span class="dot"></span>换算 Y：{Y_FIELD_PLOT}</span>
+        <span class="hero-badge"><span class="dot"></span>试件直径 50 cm</span>
+        <span class="hero-badge"><span class="dot"></span>支持批量导出 ZIP</span>
     </div>
-    """,
-    unsafe_allow_html=True,
-)
+    <div class="formula-box">
+        <b>应力换算公式：</b><br>
+        {FORMULA_HTML}
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # ============ 上传区 ============
 with st.container(border=True):
@@ -508,16 +447,13 @@ with st.container(border=True):
     )
 
 if not uploaded_files:
-    st.markdown(
-        """
-        <div class="empty-state">
-            <div class="icon">📁</div>
-            <div class="title">还没有上传文件</div>
-            <div style="margin-top:6px;">请在上方区域选择一个或多个 CSV / TXT 文件开始处理</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown("""
+<div class="empty-state">
+    <div class="icon">📁</div>
+    <div class="title">还没有上传文件</div>
+    <div style="margin-top:6px;">请在上方区域选择一个或多个 CSV / TXT 文件开始处理</div>
+</div>
+""", unsafe_allow_html=True)
     st.stop()
 
 # ============ 批量解析 ============
@@ -528,16 +464,9 @@ n = len(uploaded_files)
 for i, uf in enumerate(uploaded_files):
     data = uf.getvalue()
     item = {
-        "name": uf.name,
-        "key": file_key(uf.name, data),
-        "df": None,
-        "excel_bytes": None,
-        "enc": None,
-        "sep": None,
-        "ok": False,
-        "err": None,
-        "x_col": None,
-        "y_col": None,
+        "name": uf.name, "key": file_key(uf.name, data),
+        "df": None, "excel_bytes": None, "enc": None, "sep": None,
+        "ok": False, "err": None, "x_col": None, "y_col": None,
     }
     try:
         df, enc, sep = read_csv_smart(data, encoding_option, delimiter_option)
@@ -570,9 +499,7 @@ with st.container(border=True):
     c5.metric("📋 总列数", f"{total_cols:,}")
 
     if fail_items:
-        st.warning(
-            "以下文件解析失败：" + "、".join(f"`{p['name']}`" for p in fail_items)
-        )
+        st.warning("以下文件解析失败：" + "、".join(f"`{p['name']}`" for p in fail_items))
     if not ok_items:
         st.error("没有任何文件解析成功，请检查编码/分隔符设置。")
         st.stop()
@@ -584,22 +511,64 @@ tab_plot, tab_files, tab_data, tab_download = st.tabs(
 
 # ---------- 曲线 ----------
 with tab_plot:
-    st.markdown(f"**固定绘制：X = `{X_FIELD}`，Y = `{Y_FIELD}`**")
-
     if not plottable_items:
         st.error(
             f"没有任何文件同时包含 `{X_FIELD}` 和 `{Y_FIELD}` 两列，无法绘图。\n\n"
             "请在「🔍 数据预览」中确认列名是否完全一致（含单位与括号）。"
         )
     else:
-        top_left, top_right = st.columns([2, 1])
-        with top_left:
-            file_names = [p["name"] for p in plottable_items]
-            sel_name = st.selectbox("选择要绘图的文件", file_names, index=0, key="plot_file")
-        with top_right:
-            st.caption("&nbsp;", unsafe_allow_html=True)
-            st.caption(f"可绘图文件：**{len(plottable_items)}** 个")
+        # ===== 1. 文件选择 + 动态裁剪参数（同一行展示） =====
+        c_file, c_head, c_tail = st.columns([2.2, 1, 1])
 
+        with c_file:
+            file_names = [p["name"] for p in plottable_items]
+            sel_name = st.selectbox(
+                "选择要绘图的文件", file_names, index=0, key="plot_file"
+            )
+
+        with c_head:
+            trim_head_use = st.number_input(
+                "去除前 N 行",
+                min_value=0, max_value=100000,
+                value=int(st.session_state["trim_head_use"]),
+                step=1, key="trim_head_use_input",
+            )
+
+        with c_tail:
+            trim_tail_use = st.number_input(
+                "去除后 N 行",
+                min_value=0, max_value=100000,
+                value=int(st.session_state["trim_tail_use"]),
+                step=1, key="trim_tail_use_input",
+            )
+
+        # 写回 session_state
+        st.session_state["trim_head_use"] = int(trim_head_use)
+        st.session_state["trim_tail_use"] = int(trim_tail_use)
+
+        st.caption(
+            f"可绘图文件：**{len(plottable_items)}** 个 ｜ "
+            f"当前裁剪：前 **{st.session_state['trim_head_use']}** 行、"
+            f"后 **{st.session_state['trim_tail_use']}** 行"
+        )
+
+        # ===== 2. 绘图说明 =====
+        st.markdown(f"""
+<div style="background:#ffffff;border:1px solid #e3ebf6;border-radius:12px;
+            padding:14px 18px;margin:12px 0;">
+    <div style="font-weight:700;color:#0f172a;margin-bottom:6px;">
+        📐 绘图说明
+    </div>
+    <div style="color:#334155;font-size:0.95rem;line-height:1.9;">
+        X 轴固定：<code>{X_FIELD}</code>（不变）<br>
+        <b>左图（原始）</b>：Y 轴直接使用 <code>{Y_FIELD}</code>，不做换算；<br>
+        <b>右图（换算）</b>：Y 轴按下列公式换算为 <b>{Y_FIELD_PLOT}</b>：<br>
+        {FORMULA_HTML}
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+        # ===== 3. 绘图 =====
         sel = next(p for p in plottable_items if p["name"] == sel_name)
         df = sel["df"]
         x_col, y_col = sel["x_col"], sel["y_col"]
@@ -607,7 +576,11 @@ with tab_plot:
         with st.container(border=True):
             plot_df = df
             if trim_enabled:
-                plot_df, status = trim_dataframe(df, trim_head, trim_tail)
+                plot_df, status = trim_dataframe(
+                    df,
+                    st.session_state["trim_head_use"],
+                    st.session_state["trim_tail_use"],
+                )
                 if not status["ok"]:
                     st.error(f"文件 `{sel_name}`：{status['msg']}")
                     st.stop()
@@ -615,27 +588,69 @@ with tab_plot:
             else:
                 st.caption("未启用行裁剪，使用完整数据绘图。")
 
-            fig = make_plot(
-                plot_df, x_col, y_col, plot_type, downsample,
-                show_fill=show_fill,
-                title=f"{sel_name} | {y_col} — {x_col}",
-            )
-            st.plotly_chart(fig, use_container_width=True, config={"displaylogo": False})
+            col_left, col_right = st.columns(2)
 
-            png_col, _ = st.columns([1, 3])
-            with png_col:
-                if st.checkbox("生成 PNG 下载", value=False, key="want_png"):
-                    try:
-                        img_bytes = fig.to_image(format="png", scale=2)
-                        st.download_button(
-                            label="🖼️ 下载当前图片 (PNG)",
-                            data=img_bytes,
-                            file_name=f"{sel_name.rsplit('.', 1)[0]}_{datetime.now():%Y%m%d_%H%M%S}.png",
-                            mime="image/png",
-                            key="dl_png_current",
-                        )
-                    except Exception:
-                        st.caption("提示：导出 PNG 需要安装 kaleido：`pip install kaleido`")
+            with col_left:
+                st.markdown('<div class="chart-title">图 1 · 原始应力应变曲线</div>',
+                            unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="chart-sub">Y 轴：<code>{y_col}</code>（未处理，完整数字刻度）</div>',
+                    unsafe_allow_html=True)
+                fig_raw = make_plot_raw(
+                    plot_df, x_col, y_col, plot_type, downsample, show_fill=show_fill
+                )
+                st.plotly_chart(
+                    fig_raw, use_container_width=True, theme=None,
+                    config={"displaylogo": False, "displayModeBar": False,
+                            "staticPlot": False, "responsive": True},
+                    key="chart_raw",
+                )
+
+            with col_right:
+                st.markdown('<div class="chart-title">图 2 · 换算后应力应变曲线</div>',
+                            unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="chart-sub">Y 轴：<code>{Y_FIELD_PLOT}</code>'
+                    f'（= {y_col} / [3.14 × (50/2)²]）</div>',
+                    unsafe_allow_html=True)
+                fig_mpa = make_plot_mpa(
+                    plot_df, x_col, y_col, plot_type, downsample, show_fill=show_fill
+                )
+                st.plotly_chart(
+                    fig_mpa, use_container_width=True, theme=None,
+                    config={"displaylogo": False, "displayModeBar": False,
+                            "staticPlot": False, "responsive": True},
+                    key="chart_mpa",
+                )
+
+            # PNG 下载
+            png_col1, png_col2 = st.columns(2)
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            base_name = sel_name.rsplit(".", 1)[0]
+
+            with png_col1:
+                try:
+                    png_raw = fig_json_to_png(pio.to_json(fig_raw), scale=2)
+                    st.download_button(
+                        label="🖼️ 下载图 1 (原始 kPa)",
+                        data=png_raw,
+                        file_name=f"{base_name}_kPa_{ts}.png",
+                        mime="image/png", key="dl_png_raw",
+                    )
+                except Exception:
+                    st.caption("提示：导出 PNG 需要安装 kaleido：`pip install kaleido`")
+
+            with png_col2:
+                try:
+                    png_mpa = fig_json_to_png(pio.to_json(fig_mpa), scale=2)
+                    st.download_button(
+                        label="🖼️ 下载图 2 (换算 MPa)",
+                        data=png_mpa,
+                        file_name=f"{base_name}_MPa_{ts}.png",
+                        mime="image/png", key="dl_png_mpa",
+                    )
+                except Exception:
+                    st.caption("提示：导出 PNG 需要安装 kaleido：`pip install kaleido`")
 
         skipped = [p["name"] for p in ok_items if not (p["x_col"] and p["y_col"])]
         if skipped:
@@ -700,17 +715,20 @@ with tab_data:
 
     preview_mode = st.radio(
         "预览内容",
-        ["原始数据", "裁剪后数据（绘图用）"],
-        index=0,
-        horizontal=True,
-        key=f"preview_mode_{sel_name}",
+        ["原始数据", "裁剪后数据（绘图用）", "应力换算后（MPa）"],
+        index=0, horizontal=True, key=f"preview_mode_{sel_name}",
     )
 
     if preview_mode == "原始数据":
         st.dataframe(df.head(30), use_container_width=True, height=420)
-    else:
+
+    elif preview_mode == "裁剪后数据（绘图用）":
         if trim_enabled:
-            trimmed_df, status = trim_dataframe(df, trim_head, trim_tail)
+            trimmed_df, status = trim_dataframe(
+                df,
+                st.session_state["trim_head_use"],
+                st.session_state["trim_tail_use"],
+            )
             if status["ok"]:
                 st.caption(f"✂️ {status['msg']}")
                 st.dataframe(trimmed_df.head(30), use_container_width=True, height=420)
@@ -719,6 +737,29 @@ with tab_data:
         else:
             st.info("当前未启用行裁剪，显示与原始数据相同。")
             st.dataframe(df.head(30), use_container_width=True, height=420)
+
+    else:
+        if not (sel["x_col"] and sel["y_col"]):
+            st.error(f"该文件缺少 `{X_FIELD}` 或 `{Y_FIELD}`，无法换算。")
+        else:
+            show_df = df.copy()
+            if trim_enabled:
+                trimmed_df, status = trim_dataframe(
+                    df,
+                    st.session_state["trim_head_use"],
+                    st.session_state["trim_tail_use"],
+                )
+                if status["ok"]:
+                    show_df = trimmed_df.copy()
+                    st.caption(f"✂️ {status['msg']}")
+                else:
+                    st.warning(status["msg"])
+            show_df[Y_FIELD_PLOT] = kpa_to_mpa(show_df[sel["y_col"]])
+            st.caption(
+                f"已按公式换算：{Y_FIELD_PLOT} = {Y_FIELD} / "
+                f"[3.14 × (50/2)²]（直径 50 cm，截面积 ≈ {SPECIMEN_AREA_CM2:.1f} cm²）"
+            )
+            st.dataframe(show_df.head(30), use_container_width=True, height=420)
 
     with st.expander("查看所有列名与类型"):
         st.dataframe(
@@ -749,7 +790,11 @@ with tab_download:
         for p in ok_items:
             export_df = p["df"]
             if apply_trim_to_excel:
-                export_df, status = trim_dataframe(p["df"], trim_head, trim_tail)
+                export_df, status = trim_dataframe(
+                    p["df"],
+                    st.session_state["trim_head_use"],
+                    st.session_state["trim_tail_use"],
+                )
                 if not status["ok"]:
                     trim_notes.append(f"`{p['name']}`：{status['msg']}")
                     export_df = p["df"]
@@ -784,7 +829,11 @@ with tab_download:
         for i, p in enumerate(ok_items):
             export_df = p["df"]
             if apply_trim_to_excel:
-                export_df, status = trim_dataframe(p["df"], trim_head, trim_tail)
+                export_df, status = trim_dataframe(
+                    p["df"],
+                    st.session_state["trim_head_use"],
+                    st.session_state["trim_tail_use"],
+                )
                 if not status["ok"]:
                     export_df = p["df"]
             excel_bytes = df_to_excel_bytes_cached(export_df, sheet_name)
